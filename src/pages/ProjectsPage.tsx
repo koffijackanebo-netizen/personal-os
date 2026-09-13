@@ -19,7 +19,7 @@ import { useGoals } from "@/hooks/useGoals";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
 import { useTasks } from "@/hooks/useTasks";
 import type { Project, ProjectStatus, Priority } from "@/types/db";
-import { formatDateFr, cn } from "@/lib/utils";
+import { formatDateFr, cn, getErrorMessage } from "@/lib/utils";
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
   active: "Actif",
@@ -106,7 +106,7 @@ export default function ProjectsPage() {
       }
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 

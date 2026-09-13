@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 
 interface Message {
   role: "user" | "assistant";
@@ -44,11 +44,7 @@ export default function AssistantPage() {
       if (error) throw error;
       setMessages([...nextMessages, { role: "assistant", content: data.reply as string }]);
     } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "L'assistant n'est pas encore configuré (clé API manquante côté serveur).",
-      );
+      toast.error(getErrorMessage(err));
       setMessages(nextMessages);
     } finally {
       setLoading(false);

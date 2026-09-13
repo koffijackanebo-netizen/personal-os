@@ -22,7 +22,7 @@ import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal } from "@/hooks/u
 import { useProjects } from "@/hooks/useProjects";
 import { useTasks } from "@/hooks/useTasks";
 import type { Goal, GoalStatus, Priority } from "@/types/db";
-import { formatDateFr } from "@/lib/utils";
+import { formatDateFr, getErrorMessage } from "@/lib/utils";
 
 const emptyForm = {
   title: "",
@@ -95,7 +95,7 @@ export default function GoalsPage() {
       }
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 

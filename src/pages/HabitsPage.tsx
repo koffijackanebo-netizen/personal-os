@@ -25,7 +25,7 @@ import {
   computeHabitStats,
 } from "@/hooks/useHabits";
 import type { HabitContext, HabitFrequency } from "@/types/db";
-import { todayISO } from "@/lib/utils";
+import { todayISO, getErrorMessage } from "@/lib/utils";
 
 const emptyForm = {
   title: "",
@@ -60,7 +60,7 @@ export default function HabitsPage() {
       setForm(emptyForm);
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 

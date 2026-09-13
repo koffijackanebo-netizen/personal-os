@@ -28,7 +28,7 @@ import {
 } from "@/hooks/useTasks";
 import { useProjects } from "@/hooks/useProjects";
 import type { Task, TaskStatus, Energy, Priority } from "@/types/db";
-import { cn, formatDateFr, isOverdue } from "@/lib/utils";
+import { cn, formatDateFr, isOverdue, getErrorMessage } from "@/lib/utils";
 
 const ENERGY_LABEL: Record<Energy, string> = { high: "🔥 Élevée", medium: "⚡ Moyenne", low: "🌙 Faible" };
 
@@ -118,7 +118,7 @@ export default function TasksPage() {
       }
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 

@@ -14,7 +14,7 @@ import {
   useEndDeepWork,
 } from "@/hooks/useDeepWork";
 import { useTasks } from "@/hooks/useTasks";
-import { formatDateFr } from "@/lib/utils";
+import { formatDateFr, getErrorMessage } from "@/lib/utils";
 
 function useElapsedSeconds(startedAt: string | undefined) {
   const [seconds, setSeconds] = React.useState(0);
@@ -62,7 +62,7 @@ export default function DeepWorkPage() {
       setObjective("");
       setTaskId("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 
@@ -73,7 +73,7 @@ export default function DeepWorkPage() {
       setResult("");
       toast.success("Session terminée");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 

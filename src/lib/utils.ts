@@ -23,3 +23,16 @@ export function isOverdue(dueDate: string | null | undefined): boolean {
   if (!dueDate) return false;
   return dueDate < todayISO();
 }
+
+/**
+ * Extrait un message lisible d'une erreur, qu'il s'agisse d'une vraie `Error` JS
+ * ou d'un objet d'erreur Supabase/Postgrest (qui a un `.message` mais n'étend pas `Error`).
+ */
+export function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return "Une erreur est survenue";
+}

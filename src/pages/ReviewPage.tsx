@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useTodayReview, useRecentReviews, useSaveTodayReview } from "@/hooks/useDailyReview";
-import { formatDateFr } from "@/lib/utils";
+import { formatDateFr, getErrorMessage } from "@/lib/utils";
 
 const QUESTIONS: { key: keyof FormState; label: string }[] = [
   { key: "accomplishments", label: "Qu'est-ce que j'ai réellement accompli ?" },
@@ -57,7 +57,7 @@ export default function ReviewPage() {
       await saveReview.mutateAsync(form);
       toast.success("Revue enregistrée");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur");
+      toast.error(getErrorMessage(err));
     }
   }
 
