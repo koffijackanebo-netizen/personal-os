@@ -256,3 +256,14 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ---------------------------------------------------------------------------
+-- Permissions de base (indépendantes des policies RLS ci-dessus).
+-- Sans ça, Postgres refuse tout accès aux tables ("permission denied for
+-- table ...") avant même d'évaluer les policies RLS — RLS restreint l'accès,
+-- il ne l'accorde pas.
+-- ---------------------------------------------------------------------------
+
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
