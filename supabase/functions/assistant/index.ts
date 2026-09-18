@@ -28,12 +28,30 @@ Cherche toujours : "Quelle est la prochaine action concrète ?"
 Quand tu analyses la journée ou la semaine de l'utilisateur, cherche les causes réelles, jamais la culpabilisation :
 "Ton problème cette semaine n'était pas le manque de temps. Tes tâches importantes ont été régulièrement remplacées par des tâches secondaires."
 
-Réponds en français, de façon brève et actionnable. Pas de longs préambules.`;
+Réponds en français, de façon brève et actionnable. Pas de longs préambules.
+
+Tu as accès à un "contexte mentor" : un carnet que l'utilisateur tient à jour entre les sessions
+(objectifs actuels, état de ses projets, décisions en cours, journal). Lis-le pour ne pas reposer
+des questions déjà répondues et pour rester cohérent avec les décisions déjà prises.
+
+Quand — et SEULEMENT quand — la conversation fait apparaître quelque chose qui mérite d'être
+retenu pour les prochaines sessions (une décision prise, un changement d'état important sur un
+projet, un blocage récurrent identifié), termine ta réponse par un bloc exactement dans ce format,
+après ta réponse normale à l'utilisateur :
+
+---MENTOR_UPDATE---
+<une note courte, 1 à 3 phrases, à ajouter au journal du contexte mentor>
+---END_MENTOR_UPDATE---
+
+N'inclus ce bloc que rarement — seulement quand c'est vraiment digne d'être mémorisé. La plupart
+de tes réponses ne doivent PAS en contenir. N'en mets jamais pour de la simple conversation.`;
 
 interface ChatRequest {
   message: string;
   history?: { role: "user" | "assistant"; content: string }[];
 }
+
+const MENTOR_UPDATE_RE = /---MENTOR_UPDATE---\s*([\s\S]*?)\s*---END_MENTOR_UPDATE---/;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -64,31 +82,50 @@ Deno.serve(async (req) => {
       return json({ error: "Message vide" }, 400);
     }
 
-    const context = await gatherContext(supabase);
+    const [context, mentorContext] = await Promise.all([
+      gatherContext(supabase),
+      fetchMentorContext(supabase, user.id),
+    ]);
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
 
     const response = await anthropic.messages.create({
       model: "claude-opus-5",
       max_tokens: 1500,
-      system: `${SYSTEM_PROMPT}\n\n--- Contexte actuel de l'utilisateur ---\n${context}`,
+      system: `${SYSTEM_PROMPT}\n\n--- Contexte mentor (mémoire long terme) ---\n${mentorContext}\n\n--- Contexte actuel de l'utilisateur (données live) ---\n${context}`,
       messages: [
         ...history.map((h) => ({ role: h.role, content: h.content })),
         { role: "user" as const, content: message },
       ],
     });
 
-    const text = response.content
+    const rawText = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("\n");
 
-    return json({ reply: text });
+    const match = rawText.match(MENTOR_UPDATE_RE);
+    const reply = rawText.replace(MENTOR_UPDATE_RE, "").trim();
+    const memorySuggestion = match ? match[1].trim() : null;
+
+    return json({ reply, memorySuggestion });
   } catch (err) {
     console.error(err);
     return json({ error: err instanceof Error ? err.message : "Erreur inconnue" }, 500);
   }
 });
+
+async function fetchMentorContext(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from("mentor_context")
+    .select("content")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data?.content as string | undefined)?.trim() || "(vide — rien enregistré pour l'instant)";
+}
 
 async function gatherContext(supabase: ReturnType<typeof createClient>): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
