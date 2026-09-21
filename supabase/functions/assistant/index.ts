@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
 
     const response = await anthropic.messages.create({
       model: "claude-opus-5",
-      max_tokens: 1500,
+      max_tokens: 4096,
       tools: TOOLS,
       system: `${SYSTEM_PROMPT}\n\n--- Contexte mentor (mémoire long terme) ---\n${mentorContext}\n\n--- Contexte actuel de l'utilisateur (données live) ---\n${context}`,
       messages: [

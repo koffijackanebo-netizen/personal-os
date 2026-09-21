@@ -83,9 +83,15 @@ export default function AssistantPage() {
   const saveMentorContext = useSaveMentorContext();
   const [contextDraft, setContextDraft] = React.useState("");
 
-  const { data: history, isLoading: historyLoading } = useAssistantMessages();
+  const { data: history, isLoading: historyLoading, error: historyError } = useAssistantMessages();
   const saveMessage = useSaveAssistantMessage();
   const hydrated = React.useRef(false);
+
+  React.useEffect(() => {
+    if (historyError) {
+      toast.error(`Historique non chargé : ${getErrorMessage(historyError)}`);
+    }
+  }, [historyError]);
 
   const { data: domains } = useDomains();
   const { data: goals } = useGoals();
@@ -125,7 +131,10 @@ export default function AssistantPage() {
     setMessages(nextMessages);
     setInput("");
     setLoading(true);
-    saveMessage.mutate({ role: "user", content: trimmed });
+    saveMessage.mutate(
+      { role: "user", content: trimmed },
+      { onError: (err) => toast.error(`Message non sauvegardé : ${getErrorMessage(err)}`) },
+    );
 
     try {
       // On limite l'historique envoyé au modèle pour garder des réponses rapides et
@@ -140,7 +149,10 @@ export default function AssistantPage() {
       const memorySuggestion = (data.memorySuggestion ?? null) as string | null;
       const proposals = data.proposals as Proposals | undefined;
       setMessages([...nextMessages, { role: "assistant", content: reply, memorySuggestion, proposals }]);
-      saveMessage.mutate({ role: "assistant", content: reply, memory_suggestion: memorySuggestion, proposals });
+      saveMessage.mutate(
+        { role: "assistant", content: reply, memory_suggestion: memorySuggestion, proposals },
+        { onError: (err) => toast.error(`Réponse non sauvegardée : ${getErrorMessage(err)}`) },
+      );
     } catch (err) {
       toast.error(getErrorMessage(err));
       setMessages(nextMessages);
