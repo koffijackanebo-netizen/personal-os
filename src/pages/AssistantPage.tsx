@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn, getErrorMessage, todayISO } from "@/lib/utils";
 import { useMentorContext, useSaveMentorContext } from "@/hooks/useMentorContext";
+import { useAssistantMessages, useSaveAssistantMessage } from "@/hooks/useAssistantMessages";
 import { useDomains } from "@/hooks/useDomains";
 import { useGoals, useCreateGoal } from "@/hooks/useGoals";
 import { useProjects, useCreateProject } from "@/hooks/useProjects";
@@ -82,6 +83,10 @@ export default function AssistantPage() {
   const saveMentorContext = useSaveMentorContext();
   const [contextDraft, setContextDraft] = React.useState("");
 
+  const { data: history, isLoading: historyLoading } = useAssistantMessages();
+  const saveMessage = useSaveAssistantMessage();
+  const hydrated = React.useRef(false);
+
   const { data: domains } = useDomains();
   const { data: goals } = useGoals();
   const { data: projects } = useProjects();
@@ -92,6 +97,17 @@ export default function AssistantPage() {
   React.useEffect(() => {
     if (mentorContext !== undefined) setContextDraft(mentorContext);
   }, [mentorContext]);
+
+  // Charge l'historique persistant une seule fois — les suggestions (mémoire, propositions)
+  // ne sont pas ré-affichées pour les anciens messages, pour éviter de recréer un doublon
+  // en acceptant à nouveau une proposition déjà traitée lors d'une session précédente.
+  React.useEffect(() => {
+    if (hydrated.current || !history) return;
+    hydrated.current = true;
+    if (history.length > 0) {
+      setMessages(history.map((m) => ({ role: m.role, content: m.content })));
+    }
+  }, [history]);
 
   React.useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,21 +125,22 @@ export default function AssistantPage() {
     setMessages(nextMessages);
     setInput("");
     setLoading(true);
+    saveMessage.mutate({ role: "user", content: trimmed });
 
     try {
+      // On limite l'historique envoyé au modèle pour garder des réponses rapides et
+      // un coût raisonnable — le contexte mentor porte la mémoire long terme, pas besoin
+      // de rejouer toute la conversation depuis le début à chaque message.
+      const recentHistory = messages.slice(-24).map(({ role, content }) => ({ role, content }));
       const { data, error } = await supabase.functions.invoke("assistant", {
-        body: { message: trimmed, history: messages.map(({ role, content }) => ({ role, content })) },
+        body: { message: trimmed, history: recentHistory },
       });
       if (error) throw error;
-      setMessages([
-        ...nextMessages,
-        {
-          role: "assistant",
-          content: data.reply as string,
-          memorySuggestion: data.memorySuggestion ?? null,
-          proposals: data.proposals as Proposals | undefined,
-        },
-      ]);
+      const reply = data.reply as string;
+      const memorySuggestion = (data.memorySuggestion ?? null) as string | null;
+      const proposals = data.proposals as Proposals | undefined;
+      setMessages([...nextMessages, { role: "assistant", content: reply, memorySuggestion, proposals }]);
+      saveMessage.mutate({ role: "assistant", content: reply, memory_suggestion: memorySuggestion, proposals });
     } catch (err) {
       toast.error(getErrorMessage(err));
       setMessages(nextMessages);
@@ -231,7 +248,10 @@ export default function AssistantPage() {
       </div>
 
       <div className="mt-4 flex-1 overflow-y-auto rounded-lg border bg-card p-4">
-        {messages.length === 0 && (
+        {historyLoading && messages.length === 0 && (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Chargement…</div>
+        )}
+        {!historyLoading && messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-muted-foreground">Pose une question, ou choisis :</p>
             <div className="flex flex-wrap justify-center gap-2">
