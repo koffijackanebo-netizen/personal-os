@@ -1,18 +1,20 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Check, Flame, Target as TargetIcon, Zap } from "lucide-react";
+import { AlertTriangle, Bell, Check, Flame, Target as TargetIcon, Zap } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn, formatDateFr, isOverdue, todayISO } from "@/lib/utils";
+import { cn, formatDateFr, getErrorMessage, isOverdue, todayISO } from "@/lib/utils";
 import { useGoals } from "@/hooks/useGoals";
 import { useProjects } from "@/hooks/useProjects";
 import { useTasks, splitTasksForToday, useCompleteTask } from "@/hooks/useTasks";
 import { useHabits, useHabitLogs, useLogHabitToday, useUnlogHabitToday } from "@/hooks/useHabits";
 import { useTodayEnergy, useSetTodayEnergy } from "@/hooks/useProfile";
 import { useDeepWorkSessions } from "@/hooks/useDeepWork";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import type { Energy } from "@/types/db";
 
 const ENERGY_OPTIONS: { value: Energy; label: string; icon: string }[] = [
@@ -289,6 +291,65 @@ export default function DashboardPage() {
           </Link>
         </CardContent>
       </Card>
+
+      <NotificationsCard />
     </div>
+  );
+}
+
+function NotificationsCard() {
+  const { status, supported, enable, disable, sendTest } = usePushNotifications();
+  const [busy, setBusy] = React.useState(false);
+
+  if (!supported) return null;
+
+  async function handleToggle() {
+    setBusy(true);
+    try {
+      if (status === "subscribed") {
+        await disable();
+        toast.success("Notifications désactivées");
+      } else {
+        await enable();
+        toast.success("Notifications activées");
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleTest() {
+    setBusy(true);
+    try {
+      await sendTest();
+      toast.success("Notification de test envoyée");
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center gap-3 pt-5 text-sm">
+        <Bell className="h-4 w-4 text-primary" />
+        <span>
+          Notifications : <strong>{status === "subscribed" ? "activées" : "désactivées"}</strong>
+        </span>
+        <div className="ml-auto flex gap-2">
+          {status === "subscribed" && (
+            <Button size="sm" variant="outline" onClick={handleTest} disabled={busy}>
+              Tester
+            </Button>
+          )}
+          <Button size="sm" variant={status === "subscribed" ? "ghost" : "default"} onClick={handleToggle} disabled={busy}>
+            {status === "subscribed" ? "Désactiver" : "Activer"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
