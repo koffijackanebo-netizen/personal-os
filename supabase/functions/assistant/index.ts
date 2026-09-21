@@ -44,7 +44,18 @@ après ta réponse normale à l'utilisateur :
 ---END_MENTOR_UPDATE---
 
 N'inclus ce bloc que rarement — seulement quand c'est vraiment digne d'être mémorisé. La plupart
-de tes réponses ne doivent PAS en contenir. N'en mets jamais pour de la simple conversation.`;
+de tes réponses ne doivent PAS en contenir. N'en mets jamais pour de la simple conversation.
+
+Tu disposes aussi d'outils (propose_goal, propose_project, propose_task) pour proposer la création
+d'objectifs, projets ou tâches directement dans le système de l'utilisateur. Utilise-les quand la
+conversation fait clairement apparaître un nouvel objectif, un nouveau projet ou une prochaine action
+concrète qui n'existe pas déjà (regarde la liste des objectifs/projets/tâches actifs dans le contexte
+avant de proposer — ne duplique jamais un élément déjà présent). Ces propositions sont toujours
+soumises à validation par l'utilisateur avant d'être réellement créées — tu peux donc proposer dès
+que c'est pertinent, sans crainte de créer du bruit silencieusement. Une conversation normale n'a pas
+forcément besoin d'appeler ces outils ; ne les utilise que quand ça correspond vraiment à quelque
+chose de nouveau et concret. Pour lier un projet à un objectif ou une tâche à un projet, utilise le
+titre EXACT d'un élément déjà existant (visible dans le contexte) — sinon laisse le lien vide.`;
 
 interface ChatRequest {
   message: string;
@@ -52,6 +63,72 @@ interface ChatRequest {
 }
 
 const MENTOR_UPDATE_RE = /---MENTOR_UPDATE---\s*([\s\S]*?)\s*---END_MENTOR_UPDATE---/;
+
+const DOMAIN_NAMES = [
+  "Carrière",
+  "Finances",
+  "Business",
+  "Développement personnel",
+  "Relations sociales",
+  "Apprentissage",
+  "Santé / énergie",
+  "Organisation personnelle",
+];
+
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: "propose_goal",
+    description:
+      "Propose de créer un nouvel objectif dans le système de l'utilisateur. Uniquement pour un objectif clair et nouveau, absent de la liste des objectifs actifs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Titre court de l'objectif" },
+        domain: { type: "string", enum: DOMAIN_NAMES, description: "Domaine de vie le plus pertinent" },
+        expected_result: { type: "string" },
+        indicator: { type: "string" },
+        reason: { type: "string" },
+        priority: { type: "integer", enum: [1, 2, 3], description: "1=haute, 2=moyenne, 3=basse" },
+        deadline: { type: "string", description: "Date YYYY-MM-DD si pertinente, sinon omettre" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "propose_project",
+    description:
+      "Propose de créer un nouveau projet, éventuellement lié à un objectif existant. Uniquement pour un projet concret et nouveau.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        goal_title: { type: "string", description: "Titre EXACT d'un objectif existant à lier, si pertinent" },
+        priority: { type: "integer", enum: [1, 2, 3] },
+        potential_value: { type: "number", description: "Valeur potentielle en FCFA si pertinent" },
+        deadline: { type: "string", description: "Date YYYY-MM-DD" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "propose_task",
+    description:
+      "Propose de créer une nouvelle tâche concrète (prochaine action), éventuellement liée à un projet existant.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Action concrète et exécutable, pas une intention vague" },
+        project_title: { type: "string", description: "Titre EXACT d'un projet existant à lier, si pertinent" },
+        priority: { type: "integer", enum: [1, 2, 3] },
+        duration_minutes: { type: "integer" },
+        energy_required: { type: "string", enum: ["high", "medium", "low"] },
+        due_date: { type: "string", description: "Date YYYY-MM-DD" },
+        is_discomfort_action: { type: "boolean" },
+      },
+      required: ["title"],
+    },
+  },
+];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -92,6 +169,7 @@ Deno.serve(async (req) => {
     const response = await anthropic.messages.create({
       model: "claude-opus-5",
       max_tokens: 1500,
+      tools: TOOLS,
       system: `${SYSTEM_PROMPT}\n\n--- Contexte mentor (mémoire long terme) ---\n${mentorContext}\n\n--- Contexte actuel de l'utilisateur (données live) ---\n${context}`,
       messages: [
         ...history.map((h) => ({ role: h.role, content: h.content })),
@@ -108,7 +186,15 @@ Deno.serve(async (req) => {
     const reply = rawText.replace(MENTOR_UPDATE_RE, "").trim();
     const memorySuggestion = match ? match[1].trim() : null;
 
-    return json({ reply, memorySuggestion });
+    const proposals = { goals: [] as unknown[], projects: [] as unknown[], tasks: [] as unknown[] };
+    for (const block of response.content) {
+      if (block.type !== "tool_use") continue;
+      if (block.name === "propose_goal") proposals.goals.push(block.input);
+      else if (block.name === "propose_project") proposals.projects.push(block.input);
+      else if (block.name === "propose_task") proposals.tasks.push(block.input);
+    }
+
+    return json({ reply, memorySuggestion, proposals });
   } catch (err) {
     console.error(err);
     return json({ error: err instanceof Error ? err.message : "Erreur inconnue" }, 500);
