@@ -40,6 +40,7 @@ interface ProjectProposal {
 }
 interface TaskProposal {
   title: string;
+  reason?: string;
   project_title?: string;
   priority?: Priority;
   duration_minutes?: number;
@@ -233,6 +234,7 @@ export default function AssistantPage() {
     try {
       await createTask.mutateAsync({
         title: p.title,
+        reason: p.reason ?? null,
         project_id: project?.id ?? null,
         priority: p.priority ?? 2,
         duration_minutes: p.duration_minutes ?? null,

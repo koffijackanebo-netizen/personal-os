@@ -15,7 +15,9 @@ import { useHabits, useHabitLogs, useLogHabitToday, useUnlogHabitToday } from "@
 import { useTodayEnergy, useSetTodayEnergy } from "@/hooks/useProfile";
 import { useDeepWorkSessions } from "@/hooks/useDeepWork";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import type { Energy } from "@/types/db";
+import TaskFormDialog from "@/components/TaskFormDialog";
+import GoalFormDialog from "@/components/GoalFormDialog";
+import type { Energy, Task, Goal } from "@/types/db";
 
 const ENERGY_OPTIONS: { value: Energy; label: string; icon: string }[] = [
   { value: "high", label: "Élevée", icon: "🔥" },
@@ -35,6 +37,20 @@ export default function DashboardPage() {
   const completeTask = useCompleteTask();
   const logHabit = useLogHabitToday();
   const unlogHabit = useUnlogHabitToday();
+
+  const [detailTask, setDetailTask] = React.useState<Task | null>(null);
+  const [taskDialogOpen, setTaskDialogOpen] = React.useState(false);
+  const [detailGoal, setDetailGoal] = React.useState<Goal | null>(null);
+  const [goalDialogOpen, setGoalDialogOpen] = React.useState(false);
+
+  function openTaskDetail(t: Task) {
+    setDetailTask(t);
+    setTaskDialogOpen(true);
+  }
+  function openGoalDetail(g: Goal) {
+    setDetailGoal(g);
+    setGoalDialogOpen(true);
+  }
 
   const { dueToday, overdue, all: activeTasks } = splitTasksForToday(tasks);
 
@@ -148,7 +164,7 @@ export default function DashboardPage() {
         <CardContent>
           {oneThing ? (
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="cursor-pointer" onClick={() => openTaskDetail(oneThing)}>
                 <p className="font-medium">{oneThing.title}</p>
                 <p className="text-sm text-muted-foreground">
                   {oneThing.duration_minutes ? `${oneThing.duration_minutes} min · ` : ""}
@@ -174,8 +190,16 @@ export default function DashboardPage() {
           <CardContent className="flex flex-col gap-2">
             {topTasks.length === 0 && <p className="text-sm text-muted-foreground">Rien de prioritaire pour l'instant.</p>}
             {topTasks.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 text-sm">
-                <Checkbox checked={false} onCheckedChange={() => completeTask.mutate(t.id)} />
+              <div
+                key={t.id}
+                className="flex cursor-pointer items-center gap-2 text-sm"
+                onClick={() => openTaskDetail(t)}
+              >
+                <Checkbox
+                  checked={false}
+                  onCheckedChange={() => completeTask.mutate(t.id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
                 <span className={cn(isOverdue(t.due_date) && "text-status-bad")}>{t.title}</span>
               </div>
             ))}
@@ -200,8 +224,16 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {dueToday.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 text-sm">
-                <Checkbox checked={false} onCheckedChange={() => completeTask.mutate(t.id)} />
+              <div
+                key={t.id}
+                className="flex cursor-pointer items-center gap-2 text-sm"
+                onClick={() => openTaskDetail(t)}
+              >
+                <Checkbox
+                  checked={false}
+                  onCheckedChange={() => completeTask.mutate(t.id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
                 <span>{t.title}</span>
               </div>
             ))}
@@ -214,8 +246,16 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {overdue.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 text-sm">
-                <Checkbox checked={false} onCheckedChange={() => completeTask.mutate(t.id)} />
+              <div
+                key={t.id}
+                className="flex cursor-pointer items-center gap-2 text-sm"
+                onClick={() => openTaskDetail(t)}
+              >
+                <Checkbox
+                  checked={false}
+                  onCheckedChange={() => completeTask.mutate(t.id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
                 <span className="text-status-bad">{t.title}</span>
               </div>
             ))}
@@ -263,7 +303,7 @@ export default function DashboardPage() {
           {(goals ?? [])
             .filter((g) => g.status === "active")
             .map((g) => (
-              <div key={g.id} className="flex flex-col gap-1">
+              <div key={g.id} className="flex cursor-pointer flex-col gap-1" onClick={() => openGoalDetail(g)}>
                 <div className="flex items-center justify-between text-sm">
                   <span>{g.title}</span>
                   <span className="text-muted-foreground">{g.progress}%</span>
@@ -293,6 +333,9 @@ export default function DashboardPage() {
       </Card>
 
       <NotificationsCard />
+
+      <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} task={detailTask} />
+      <GoalFormDialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen} goal={detailGoal} />
     </div>
   );
 }

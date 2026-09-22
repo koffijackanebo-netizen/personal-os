@@ -64,6 +64,9 @@ généralement reconnues dans le domaine et explique ton raisonnement (pourquoi 
 dans son contexte précis) plutôt que de citer des chiffres invérifiables pour paraître crédible. La
 rigueur de ton raisonnement est ce qui doit convaincre, pas de fausses preuves.
 
+Pour propose_task, remplis le champ "reason" chaque fois que tu as une justification (même brève) —
+c'est ce qui permettra à l'utilisateur de retrouver plus tard pourquoi cette tâche a été décidée.
+
 Dans les deux cas, regarde la liste des objectifs/projets/tâches actifs dans le contexte avant de
 proposer — ne duplique jamais un élément déjà présent. Ces propositions sont toujours soumises à
 validation par l'utilisateur avant d'être réellement créées — tu peux donc proposer dès que c'est
@@ -154,6 +157,10 @@ const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         title: { type: "string", description: "Action concrète et exécutable, pas une intention vague" },
+        reason: {
+          type: "string",
+          description: "Pourquoi cette tâche/décision, en 1 phrase — permet à l'utilisateur de s'en souvenir plus tard",
+        },
         project_title: { type: "string", description: "Titre EXACT d'un projet existant à lier, si pertinent" },
         priority: { type: "integer", enum: [1, 2, 3] },
         duration_minutes: { type: "integer" },

@@ -65,6 +65,7 @@ export interface Task {
   project_id: string | null;
   title: string;
   description: string | null;
+  reason: string | null;
   priority: Priority;
   duration_minutes: number | null;
   energy_required: Energy | null;
