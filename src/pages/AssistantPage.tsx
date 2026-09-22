@@ -1,5 +1,5 @@
 import * as React from "react";
-import { BookOpen, Check, FolderKanban, ListChecks, Send, Target, X } from "lucide-react";
+import { BookOpen, Check, FolderKanban, ListChecks, Send, Target, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,9 @@ import { useDomains } from "@/hooks/useDomains";
 import { useGoals, useCreateGoal } from "@/hooks/useGoals";
 import { useProjects, useCreateProject } from "@/hooks/useProjects";
 import { useCreateTask } from "@/hooks/useTasks";
+import { useCreateFinanceTransaction } from "@/hooks/useFinance";
 import type { Energy, Priority } from "@/types/db";
+import type { TransactionType } from "@/types/finance";
 
 interface GoalProposal {
   title: string;
@@ -45,10 +47,21 @@ interface TaskProposal {
   due_date?: string;
   is_discomfort_action?: boolean;
 }
+interface FinanceProposal {
+  type: TransactionType;
+  category: string;
+  amount: number;
+  quantity?: number;
+  unit_price?: number;
+  project_title?: string;
+  transaction_date?: string;
+  description?: string;
+}
 interface Proposals {
   goals: GoalProposal[];
   projects: ProjectProposal[];
   tasks: TaskProposal[];
+  financeTransactions: FinanceProposal[];
 }
 
 interface Message {
@@ -99,6 +112,7 @@ export default function AssistantPage() {
   const createGoal = useCreateGoal();
   const createProject = useCreateProject();
   const createTask = useCreateTask();
+  const createFinanceTransaction = useCreateFinanceTransaction();
 
   React.useEffect(() => {
     if (mentorContext !== undefined) setContextDraft(mentorContext);
@@ -237,6 +251,26 @@ export default function AssistantPage() {
     }
   }
 
+  async function acceptFinance(key: string, p: FinanceProposal) {
+    const project = findByTitle(projects, p.project_title);
+    try {
+      await createFinanceTransaction.mutateAsync({
+        type: p.type,
+        category: p.category,
+        amount: p.amount,
+        quantity: p.quantity ?? null,
+        unit_price: p.unit_price ?? null,
+        project_id: project?.id ?? null,
+        transaction_date: p.transaction_date || todayISO(),
+        description: p.description ?? null,
+      });
+      markHandled(key);
+      toast.success("Transaction enregistrée");
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  }
+
   async function saveContext() {
     try {
       await saveMentorContext.mutateAsync(contextDraft);
@@ -349,6 +383,23 @@ export default function AssistantPage() {
                     summary={p.title}
                     detail={p.project_title ? `Liée au projet : ${p.project_title}` : undefined}
                     onAccept={() => acceptTask(key, p)}
+                    onDismiss={() => markHandled(key)}
+                  />
+                );
+              })}
+
+              {m.proposals?.financeTransactions.map((p, j) => {
+                const key = `${i}-finance-${j}`;
+                if (handled.has(key)) return null;
+                const sign = p.type === "income" ? "+" : "-";
+                return (
+                  <SuggestionCard
+                    key={key}
+                    icon={<Wallet className="h-3.5 w-3.5" />}
+                    label="Transaction proposée :"
+                    summary={`${p.category} : ${sign}${p.amount.toLocaleString("fr-FR")} FCFA`}
+                    detail={p.project_title ? `Projet : ${p.project_title}` : undefined}
+                    onAccept={() => acceptFinance(key, p)}
                     onDismiss={() => markHandled(key)}
                   />
                 );

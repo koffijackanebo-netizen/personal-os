@@ -7,6 +7,7 @@ import {
   Repeat,
   Moon,
   Timer,
+  Wallet,
   MessageCircle,
   LogOut,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/habits", label: "Habitudes", icon: Repeat },
   { to: "/review", label: "Revue", icon: Moon },
   { to: "/deep-work", label: "Deep Work", icon: Timer },
+  { to: "/finance", label: "Finance", icon: Wallet },
   { to: "/assistant", label: "Assistant", icon: MessageCircle },
 ];
 

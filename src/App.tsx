@@ -11,6 +11,7 @@ import HabitsPage from "@/pages/HabitsPage";
 import ReviewPage from "@/pages/ReviewPage";
 import DeepWorkPage from "@/pages/DeepWorkPage";
 import AssistantPage from "@/pages/AssistantPage";
+import FinancePage from "@/pages/FinancePage";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/habits" element={<HabitsPage />} />
             <Route path="/review" element={<ReviewPage />} />
             <Route path="/deep-work" element={<DeepWorkPage />} />
+            <Route path="/finance" element={<FinancePage />} />
             <Route path="/assistant" element={<AssistantPage />} />
           </Route>
         </Route>

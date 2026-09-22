@@ -71,7 +71,27 @@ pertinent, sans crainte de créer du bruit silencieusement, mais n'en abuse pas 
 propositions vraiment pertinentes valent mieux qu'une liste. Une conversation normale n'a pas
 forcément besoin d'appeler ces outils. Pour lier un projet à un objectif ou une tâche à un projet,
 utilise le titre EXACT d'un élément déjà existant (visible dans le contexte) — sinon laisse le lien
-vide.`;
+vide.
+
+Module finance : tu as accès à l'outil propose_finance_transaction et au résumé financier par projet
+(section "Finances par projet" du contexte). Ce module aide l'utilisateur à suivre ses ventes et sa
+trésorerie sans qu'il ait à être doué en gestion financière — c'est TOI qui dois structurer et
+catégoriser, lui n'a qu'à décrire ce qui s'est passé en langage courant.
+
+Règle stricte, différente des autres outils : propose_finance_transaction est UNIQUEMENT réactif —
+n'enregistre QUE des montants, quantités ou dates que l'utilisateur vient explicitement de te donner
+dans la conversation. N'invente et n'estime JAMAIS un montant manquant, même "pour aider" — si un
+chiffre nécessaire manque (montant, quantité...), demande-le au lieu d'appeler l'outil. C'est un
+prolongement direct de la règle anti-invention déjà énoncée : ici l'enjeu est de l'argent réel, la
+rigueur n'est pas négociable.
+
+En revanche, tu dois activement guider l'utilisateur sur la partie gestion : aide-le à catégoriser
+correctement (vente / achat de stock / publicité / export / autre), signale-lui les patterns
+préoccupants visibles dans le résumé financier (marge qui se dégrade, dépenses qui dépassent les
+revenus sur un projet, trésorerie d'un projet qui devient négative), et propose des pratiques de
+suivi financier de base quand elles manquent (ex. suivre le coût d'acquisition par vente, distinguer
+marge brute et trésorerie disponible) — toujours via propose_goal/propose_task pour la partie
+"mettre en place une pratique", jamais en insérant de fausses transactions.`;
 
 interface ChatRequest {
   message: string;
@@ -144,6 +164,28 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["title"],
     },
   },
+  {
+    name: "propose_finance_transaction",
+    description:
+      "Propose d'enregistrer une transaction financière (vente = income, dépense = expense) UNIQUEMENT à partir de montants/quantités que l'utilisateur vient explicitement de donner. Jamais de montant estimé ou inventé.",
+    input_schema: {
+      type: "object",
+      properties: {
+        type: { type: "string", enum: ["income", "expense"] },
+        category: {
+          type: "string",
+          description: "Ex. Vente, Achat stock, Publicité, Export / logistique, Autre",
+        },
+        amount: { type: "number", description: "Montant total en FCFA, donné explicitement par l'utilisateur" },
+        quantity: { type: "integer", description: "Quantité d'unités si pertinent (ex. nombre de portefeuilles vendus)" },
+        unit_price: { type: "number", description: "Prix unitaire si donné" },
+        project_title: { type: "string", description: "Titre EXACT d'un projet existant à lier, si pertinent" },
+        transaction_date: { type: "string", description: "Date YYYY-MM-DD, sinon aujourd'hui" },
+        description: { type: "string" },
+      },
+      required: ["type", "category", "amount"],
+    },
+  },
 ];
 
 Deno.serve(async (req) => {
@@ -202,12 +244,18 @@ Deno.serve(async (req) => {
     const reply = rawText.replace(MENTOR_UPDATE_RE, "").trim();
     const memorySuggestion = match ? match[1].trim() : null;
 
-    const proposals = { goals: [] as unknown[], projects: [] as unknown[], tasks: [] as unknown[] };
+    const proposals = {
+      goals: [] as unknown[],
+      projects: [] as unknown[],
+      tasks: [] as unknown[],
+      financeTransactions: [] as unknown[],
+    };
     for (const block of response.content) {
       if (block.type !== "tool_use") continue;
       if (block.name === "propose_goal") proposals.goals.push(block.input);
       else if (block.name === "propose_project") proposals.projects.push(block.input);
       else if (block.name === "propose_task") proposals.tasks.push(block.input);
+      else if (block.name === "propose_finance_transaction") proposals.financeTransactions.push(block.input);
     }
 
     return json({ reply, memorySuggestion, proposals });
@@ -232,10 +280,10 @@ async function fetchMentorContext(
 async function gatherContext(supabase: ReturnType<typeof createClient>): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: goals }, { data: projects }, { data: tasks }, { data: habits }, { data: reviews }] =
+  const [{ data: goals }, { data: projects }, { data: tasks }, { data: habits }, { data: reviews }, { data: finance }] =
     await Promise.all([
       supabase.from("goals").select("title,status,priority,progress,deadline").eq("status", "active").limit(15),
-      supabase.from("projects").select("title,status,priority,deadline").eq("status", "active").limit(15),
+      supabase.from("projects").select("id,title,status,priority,deadline").eq("status", "active").limit(15),
       supabase
         .from("tasks")
         .select("title,status,priority,due_date,postponed_count")
@@ -249,6 +297,7 @@ async function gatherContext(supabase: ReturnType<typeof createClient>): Promise
         .select("review_date,accomplishments,missed_task,missed_reason,tomorrow_first_action")
         .order("review_date", { ascending: false })
         .limit(5),
+      supabase.from("finance_transactions").select("project_id,type,amount,transaction_date").limit(500),
     ]);
 
   const lines: string[] = [`Date du jour : ${today}`];
@@ -279,6 +328,26 @@ async function gatherContext(supabase: ReturnType<typeof createClient>): Promise
       `- ${r.review_date} : accompli="${r.accomplishments ?? "—"}", manqué="${r.missed_task ?? "—"}" (raison: ${r.missed_reason ?? "—"}), demain="${r.tomorrow_first_action ?? "—"}"`,
     ),
   );
+
+  lines.push("\nFinances par projet (chiffres réels, calculés depuis les transactions enregistrées) :");
+  const byProject = new Map<string, { title: string; income: number; expense: number }>();
+  for (const p of projects ?? []) {
+    byProject.set((p as any).id, { title: (p as any).title, income: 0, expense: 0 });
+  }
+  for (const t of finance ?? []) {
+    const pid = (t as any).project_id as string | null;
+    if (!pid || !byProject.has(pid)) continue;
+    const entry = byProject.get(pid)!;
+    if ((t as any).type === "income") entry.income += Number((t as any).amount);
+    else entry.expense += Number((t as any).amount);
+  }
+  if (byProject.size === 0) {
+    lines.push("- Aucun projet actif avec des transactions.");
+  } else {
+    for (const { title, income, expense } of byProject.values()) {
+      lines.push(`- ${title} : revenus ${income} FCFA, dépenses ${expense} FCFA, solde ${income - expense} FCFA`);
+    }
+  }
 
   return lines.join("\n");
 }
